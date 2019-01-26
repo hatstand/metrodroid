@@ -1,7 +1,8 @@
 /*
- * TmoneyTransitData.java
+ * TMoneyTransitData.java
  *
  * Copyright 2018 Google
+ * Copyright 2018-2019 Michael Farrell <micolous+git@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,25 +22,34 @@ package au.id.micolous.metrodroid.transit.tmoney;
 
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 
-import org.jetbrains.annotations.NonNls;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.TimeZone;
 
 import au.id.micolous.farebot.R;
 import au.id.micolous.metrodroid.card.CardType;
+import au.id.micolous.metrodroid.card.iso7816.ISO7816File;
 import au.id.micolous.metrodroid.card.iso7816.ISO7816Record;
-import au.id.micolous.metrodroid.card.iso7816.ISO7816TLV;
-import au.id.micolous.metrodroid.card.tmoney.TMoneyCard;
+import au.id.micolous.metrodroid.card.iso7816.ISO7816Selector;
+import au.id.micolous.metrodroid.card.ksx6923.KSX6923Application;
+import au.id.micolous.metrodroid.card.ksx6923.KSX6923CardTransitFactory;
 import au.id.micolous.metrodroid.transit.CardInfo;
 import au.id.micolous.metrodroid.transit.TransitCurrency;
 import au.id.micolous.metrodroid.transit.TransitData;
 import au.id.micolous.metrodroid.transit.TransitIdentity;
+import au.id.micolous.metrodroid.transit.Trip;
 import au.id.micolous.metrodroid.ui.ListItem;
 import au.id.micolous.metrodroid.util.Utils;
-import au.id.micolous.metrodroid.xml.ImmutableByteArray;
+
+import static au.id.micolous.metrodroid.card.ksx6923.KSX6923Application.TRANSACTION_FILE;
 
 public class TMoneyTransitData extends TransitData {
     public static final Parcelable.Creator<TMoneyTransitData> CREATOR = new Parcelable.Creator<TMoneyTransitData>() {
@@ -60,23 +70,65 @@ public class TMoneyTransitData extends TransitData {
             .setPreview()
             .build();
 
-    private final String mSerialNumber;
-    private final int mBalance;
-    private final String mDate;
-    private final List<TMoneyTrip> mTrips;
+    public static final long INVALID_DATETIME = 0xffffffffffffffL;
 
-    public TMoneyTransitData(TMoneyCard tMoneyCard) {
+    public final static KSX6923CardTransitFactory FACTORY = new KSX6923CardTransitFactory() {
+        @Override
+        public TransitIdentity parseTransitIdentity(@NonNull KSX6923Application app) {
+            return new TransitIdentity(Utils.localizeString(R.string.card_name_tmoney), app.getSerial());
+        }
+
+        @Override
+        public TransitData parseTransitData(@NonNull KSX6923Application app) {
+            return new TMoneyTransitData(app);
+        }
+
+        @NonNull
+        @Override
+        public List<CardInfo> getAllCards() {
+            return Collections.singletonList(CARD_INFO);
+        }
+
+        @Override
+        public boolean check(@NotNull KSX6923Application card) {
+            return true;
+        }
+    };
+
+    private final String mSerialNumber;
+    protected final int mBalance;
+    private final Calendar mDate;
+    private final List<? extends Trip> mTrips;
+
+    public TMoneyTransitData(@NonNull KSX6923Application tMoneyCard) {
         super();
-        mSerialNumber = parseSerial(tMoneyCard);
+        mSerialNumber = tMoneyCard.getSerial();
         mBalance = tMoneyCard.getBalance();
-        mDate = parseDate(tMoneyCard);
-        mTrips = new ArrayList<>();
-        for (ISO7816Record record : tMoneyCard.getTransactionRecords()) {
-            TMoneyTrip t = TMoneyTrip.parseTrip(record.getData());
+        mDate = tMoneyCard.getIssueDate();
+        mTrips = parseTrips(tMoneyCard);
+    }
+
+    @NonNull
+    protected List<? extends Trip> parseTrips(@NonNull KSX6923Application tMoneyCard) {
+        List<TMoneyTrip> trips = new ArrayList<>();
+        for (ISO7816Record record : getTransactionRecords(tMoneyCard)) {
+            TMoneyTrip t = TMoneyTrip.Companion.parseTrip(record.getData());
             if (t == null)
                 continue;
-            mTrips.add(t);
+            trips.add(t);
         }
+
+        return Collections.unmodifiableList(trips);
+    }
+
+    @NonNull
+    protected List<ISO7816Record> getTransactionRecords(@NonNull KSX6923Application tMoneyCard) {
+        ISO7816File f = tMoneyCard.getSfiFile(TRANSACTION_FILE);
+        if (f == null)
+            f = tMoneyCard.getFile(ISO7816Selector.makeSelector(KSX6923Application.FILE_NAME, TRANSACTION_FILE));
+        if (f == null)
+            return Collections.emptyList();
+        return f.getRecords();
     }
 
     @Nullable
@@ -91,6 +143,7 @@ public class TMoneyTransitData extends TransitData {
         return mSerialNumber;
     }
 
+    @NonNull
     @Override
     public String getCardName() {
         return Utils.localizeString(R.string.card_name_tmoney);
@@ -100,20 +153,20 @@ public class TMoneyTransitData extends TransitData {
     public List<ListItem> getInfo() {
         List<ListItem> items = new ArrayList<>();
 
-        items.add(new ListItem(R.string.tmoney_date, mDate));
+        items.add(new ListItem(R.string.tmoney_date, Utils.longDateFormat(mDate)));
 
         return items;
     }
 
     @Override
-    public List<TMoneyTrip> getTrips() {
+    public List<? extends Trip> getTrips() {
         return mTrips;
     }
 
     private TMoneyTransitData(Parcel p) {
         mSerialNumber = p.readString();
         mBalance = p.readInt();
-        mDate = p.readString();
+        mDate = Utils.unparcelCalendar(p);
         //noinspection unchecked
         mTrips = p.readArrayList(TMoneyTrip.class.getClassLoader());
     }
@@ -122,26 +175,25 @@ public class TMoneyTransitData extends TransitData {
     public void writeToParcel(Parcel dest, int flags) {
         dest.writeString(mSerialNumber);
         dest.writeInt(mBalance);
-        dest.writeString(mDate);
+        Utils.parcelCalendar(dest, mDate);
         dest.writeList(mTrips);
     }
 
-    public static TransitIdentity parseTransitIdentity(TMoneyCard card) {
-        return new TransitIdentity(Utils.localizeString(R.string.card_name_tmoney), parseSerial(card));
+    public static TransitIdentity parseTransitIdentity(KSX6923Application card) {
+        return new TransitIdentity(Utils.localizeString(R.string.card_name_tmoney), card.getSerial());
     }
 
-    private static ImmutableByteArray getSerialTag(TMoneyCard card) {
-        return ISO7816TLV.INSTANCE.findBERTLV(card.getAppData(), "b0", false);
-    }
-
-    private static String parseSerial(TMoneyCard card) {
-        return Utils.groupString(getSerialTag(card).getHexString(4, 8), " ", 4, 4, 4);
-    }
-
-    @NonNls
-    private static String parseDate(TMoneyCard card) {
-        ImmutableByteArray tmoneytag = getSerialTag(card);
-        return tmoneytag.getHexString(17, 2) + "/"
-                + tmoneytag.getHexString(19, 1);
+    @Nullable
+    public static Calendar parseHexDateTime(long val, @NonNull TimeZone tz) {
+        if (val == INVALID_DATETIME)
+            return null;
+        GregorianCalendar g = new GregorianCalendar(tz);
+        g.set(Utils.convertBCDtoInteger((int) (val >> 40)),
+                Utils.convertBCDtoInteger((int) ((val >> 32) & 0xffL))-1,
+                Utils.convertBCDtoInteger((int) ((val >> 24) & 0xffL)),
+                Utils.convertBCDtoInteger((int) ((val >> 16) & 0xffL)),
+                Utils.convertBCDtoInteger((int) ((val >> 8) & 0xffL)),
+                Utils.convertBCDtoInteger((int) ((val) & 0xffL)));
+        return g;
     }
 }

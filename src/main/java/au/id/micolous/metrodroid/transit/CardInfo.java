@@ -2,7 +2,7 @@
  * CardInfo.java
  *
  * Copyright 2011 Eric Butler
- * Copyright 2015-2018 Michael Farrell
+ * Copyright 2015-2019 Michael Farrell
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,6 @@ import android.util.Log;
 
 import java.text.Collator;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -42,9 +41,9 @@ import au.id.micolous.metrodroid.card.china.ChinaCard;
 import au.id.micolous.metrodroid.card.classic.ClassicCard;
 import au.id.micolous.metrodroid.card.desfire.DesfireCard;
 import au.id.micolous.metrodroid.card.felica.FelicaCard;
+import au.id.micolous.metrodroid.card.ksx6923.KSX6923Application;
 import au.id.micolous.metrodroid.card.ultralight.UltralightCard;
 import au.id.micolous.metrodroid.transit.ezlink.EZLinkTransitData;
-import au.id.micolous.metrodroid.transit.tmoney.TMoneyTransitData;
 import au.id.micolous.metrodroid.util.Utils;
 
 /**
@@ -63,10 +62,10 @@ public final class CardInfo {
         allFactories.addAll(FelicaCard.getAllFactories());
         allFactories.addAll(UltralightCard.getAllFactories());
         allFactories.addAll(ChinaCard.getAllFactories());
+        allFactories.addAll(KSX6923Application.getAllFactories());
         for (CardTransitFactory<?> factory : allFactories) {
             ret.addAll(factory.getAllCards());
         }
-        ret.add(TMoneyTransitData.CARD_INFO);
         ret.addAll(EZLinkTransitData.ALL_CARD_INFOS);
         Collator collator = Collator.getInstance();
         Collections.sort(ret, (a, b) -> collator.compare(a.getName(), b.getName()));
