@@ -99,6 +99,7 @@
     <string name="no_scanned_cards">You have not scanned any cards.</string>
     <string name="block_title_format">Block: %s</string>
     <string name="page_title_format">Page: 0x%s</string>
+    <string name="page_title_format_empty">Page: 0x%s (empty)</string>
     <string name="application_title_format">Application: %s</string>
     <!-- Translators:
     AID = Application ID (terminology used by the card vendor)
@@ -698,6 +699,7 @@
     <string name="location_toulouse">Toulouse, France</string>
     <string name="location_vancouver">Vancouver, BC, Canada</string>
     <string name="location_victoria_australia">Victoria, Australia</string>
+    <string name="location_wellington_nz">Wellington, New Zealand</string>
     <string name="location_wa_australia">Western Australia, Australia</string>
     <string name="location_wuhan">Wuhan, China</string>
     <!-- Translators: "Yaroslavl" (Ярославль) here refers to the city, rather than the oblast (federal subject) -->

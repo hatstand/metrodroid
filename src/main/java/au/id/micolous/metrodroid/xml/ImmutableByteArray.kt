@@ -58,9 +58,20 @@ open class ImmutableByteArray private constructor(private val mData: ByteArray):
     override fun compareTo(other: ImmutableByteArray) = toHexString().compareTo(other.toHexString())
     fun byteArrayToInt(offset: Int, len: Int): Int = Utils.byteArrayToInt(mData, offset, len)
     fun isAllZero(): Boolean = mData.all { it == 0.toByte() }
+    fun isAllFF(): Boolean = mData.all {
+        android.util.Log.d("IBA", "it($it) == 0xff.toByte() (${it == 0xff.toByte()}")
+        it == 0xff.toByte() }
     fun getBitsFromBuffer(offset: Int, len: Int): Int = Utils.getBitsFromBuffer(mData, offset, len)
     fun getBitsFromBufferLeBits(off: Int, len: Int) = Utils.getBitsFromBufferLeBits(mData, off, len)
     fun getBitsFromBufferSigned(off: Int, len: Int) = Utils.getBitsFromBufferSigned(mData, off, len)
+    fun convertBCDtoInteger() : Int = fold(0) {
+        x, y -> (x * 100) + Utils.convertBCDtoInteger(y)
+    }
+    fun convertBCDtoInteger(offset: Int, len: Int) : Int = sliceOffLen(offset, len).convertBCDtoInteger()
+    fun convertBCDtoLong() : Long = fold(0L) {
+        x, y -> (x * 100L) + Utils.convertBCDtoInteger(y).toLong()
+    }
+    fun convertBCDtoLong(offset: Int, len: Int) : Long = sliceOffLen(offset, len).convertBCDtoLong()
     operator fun get(i: Int) = mData[i]
     operator fun plus(second: ImmutableByteArray) = ImmutableByteArray(this.mData + second.mData)
     fun sliceArray(intRange: IntRange) = ImmutableByteArray(mData = mData.sliceArray(intRange))

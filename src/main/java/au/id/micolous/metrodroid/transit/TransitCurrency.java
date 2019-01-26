@@ -259,6 +259,11 @@ public class TransitCurrency extends TransitBalance implements Parcelable {
     }
 
     @NonNull
+    public static TransitCurrency NZD(int cents) {
+        return new TransitCurrency(cents, "NZD");
+    }
+
+    @NonNull
     public static TransitCurrency RUB(int kopeyka) {
         return new TransitCurrency(kopeyka, "RUB");
     }
@@ -412,6 +417,19 @@ public class TransitCurrency extends TransitBalance implements Parcelable {
 
     public TransitCurrency negate() {
         return new TransitCurrency(-mCurrency, mCurrencyCode, mDivisor);
+    }
+
+    public TransitCurrency add(@NonNull TransitCurrency other) {
+        if (!sameCurrency(other)) {
+            throw new IllegalArgumentException("divisor and currency codes must be the same");
+        }
+
+        final int total = mCurrency + other.mCurrency;
+        return new TransitCurrency(total, mCurrencyCode, mDivisor);
+    }
+
+    public boolean sameCurrency(@NonNull TransitCurrency other) {
+        return mDivisor == other.mDivisor & mCurrencyCode.equals(other.mCurrencyCode);
     }
 
     @Override
