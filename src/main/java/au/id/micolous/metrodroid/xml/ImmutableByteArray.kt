@@ -58,9 +58,7 @@ open class ImmutableByteArray private constructor(private val mData: ByteArray):
     override fun compareTo(other: ImmutableByteArray) = toHexString().compareTo(other.toHexString())
     fun byteArrayToInt(offset: Int, len: Int): Int = Utils.byteArrayToInt(mData, offset, len)
     fun isAllZero(): Boolean = mData.all { it == 0.toByte() }
-    fun isAllFF(): Boolean = mData.all {
-        android.util.Log.d("IBA", "it($it) == 0xff.toByte() (${it == 0xff.toByte()}")
-        it == 0xff.toByte() }
+    fun isAllFF(): Boolean = mData.all { it == 0xff.toByte() }
     fun getBitsFromBuffer(offset: Int, len: Int): Int = Utils.getBitsFromBuffer(mData, offset, len)
     fun getBitsFromBufferLeBits(off: Int, len: Int) = Utils.getBitsFromBufferLeBits(mData, off, len)
     fun getBitsFromBufferSigned(off: Int, len: Int) = Utils.getBitsFromBufferSigned(mData, off, len)
