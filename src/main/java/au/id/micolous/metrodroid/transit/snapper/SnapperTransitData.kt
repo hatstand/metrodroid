@@ -43,7 +43,7 @@ class SnapperTransitData(tMoneyCard: KSX6923Application) : TMoneyTransitData(tMo
         return trips.records zip balances.records
     }
 
-    override fun getBalance() = TransitCurrency.NZD(mBalance)
+    override fun getBalance() = purseInfo.buildTransitBalance(TransitCurrency.NZD(mBalance))
 
     override fun getCardName() = NAME
 

@@ -37,6 +37,7 @@ import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Set;
+import java.util.TimeZone;
 
 import au.id.micolous.farebot.R;
 import au.id.micolous.metrodroid.card.TagReaderFeedbackInterface;
@@ -75,11 +76,14 @@ public class KSX6923Application extends ISO7816Application {
             TMoneyTransitData.FACTORY
     };
 
+    private static final long INVALID_DATETIME = 0xffffffffffffffL;
+    private static final long INVALID_DATE = 0xffffffffL;
     private static final byte INS_GET_BALANCE = 0x4c;
     private static final byte INS_GET_RECORD = 0x78;
     private static final byte BALANCE_RESP_LEN = 4;
     public static final byte TRANSACTION_FILE = 4;
-    private static final String TYPE = "tmoney";
+    private static final String TYPE = "ksx6923";
+    private static final String OLD_TYPE = "tmoney";
 
     @Element(name = "balance")
     private Integer mBalance;
@@ -124,9 +128,15 @@ public class KSX6923Application extends ISO7816Application {
 
     private KSX6923Application() { /* For XML Serializer */ }
 
-    private KSX6923Application(ISO7816Application.ISO7816Info appData, int balance) {
+    private KSX6923Application(ISO7816Application.ISO7816Info appData, int balance, @NonNull List<ImmutableByteArray> snapperData) {
         super(appData);
         mBalance = balance;
+        List<Base64String> wrappedSnapperData = new ArrayList<>();
+        for (ImmutableByteArray b : snapperData) {
+            wrappedSnapperData.add(new Base64String(b));
+        }
+
+        mSnapperData = Collections.unmodifiableList(wrappedSnapperData);
     }
 
     public List<Base64String> getSnapperData() {
@@ -144,7 +154,8 @@ public class KSX6923Application extends ISO7816Application {
             @StringRes final int r = d.isAllZero() || d.isAllFF() ?
                     R.string.page_title_format_empty : R.string.page_title_format;
 
-            sli.add(ListItemRecursive.collapsedValue(r, d.toHexDump()));
+            sli.add(ListItemRecursive.collapsedValue(
+                    Utils.localizeString(r, Integer.toHexString(i)), d.toHexDump()));
         }
 
         return Collections.unmodifiableList(sli);
@@ -164,6 +175,12 @@ public class KSX6923Application extends ISO7816Application {
             return TYPE;
         }
 
+        @NonNull
+        @Override
+        public List<String> getTypes() {
+            return Arrays.asList(TYPE, OLD_TYPE);
+        }
+
         /**
          * Dumps a TMoney card in the field.
          * @param appData ISO7816 app info of the tag.
@@ -175,7 +192,7 @@ public class KSX6923Application extends ISO7816Application {
         @Override
         public List<ISO7816Application> dumpTag(@NonNull ISO7816Protocol protocol, @NonNull ISO7816Info appData, @NonNull TagReaderFeedbackInterface feedbackInterface) {
             ImmutableByteArray balanceResponse;
-
+            List<ImmutableByteArray> snapperRecords = new ArrayList<>();
 
             try {
                 feedbackInterface.updateStatusText(Utils.localizeString(R.string.card_reading_type,
@@ -190,6 +207,7 @@ public class KSX6923Application extends ISO7816Application {
                 for (int i = 0; i <= 0xf; i++) {
                     Log.d(TAG, "sending snapper get = " + i);
                     ImmutableByteArray ba = protocol.sendRequest(ISO7816Protocol.CLASS_90, INS_GET_RECORD, (byte)i, (byte)0, (byte)0x10);
+                    snapperRecords.add(ba);
                 }
 
 
@@ -216,7 +234,8 @@ public class KSX6923Application extends ISO7816Application {
             }
 
             return Collections.singletonList(new KSX6923Application(appData,
-                    Utils.byteArrayToInt(balanceResponse, 0, BALANCE_RESP_LEN)));
+                    Utils.byteArrayToInt(balanceResponse, 0, BALANCE_RESP_LEN),
+                    snapperRecords));
         }
 
         @Override
@@ -229,32 +248,43 @@ public class KSX6923Application extends ISO7816Application {
         return mBalance;
     }
 
-    @NonNull
-    public List<ISO7816Record> getTransactionRecords() {
-        ISO7816File f = getSfiFile(TRANSACTION_FILE);
-        if (f == null) // Old T-Money scans
-            f = getFile(ISO7816Selector.makeSelector(FILE_NAME, TRANSACTION_FILE));
-
-        if (f == null)
-            return Collections.emptyList();
-        return f.getRecords();
-    }
-
-    private ImmutableByteArray getSerialTag() {
+    private ImmutableByteArray getPurseInfoData() {
         return ISO7816TLV.INSTANCE.findBERTLV(getAppData(), "b0", false);
     }
 
+    public KSX6923PurseInfo getPurseInfo() {
+        return new KSX6923PurseInfo(getPurseInfoData());
+    }
+
     public String getSerial() {
-        return Utils.groupString(getSerialTag().getHexString(4, 8), " ", 4, 4, 4);
+        return Utils.groupString(getPurseInfoData().getHexString(4, 8), " ", 4, 4, 4);
     }
 
-    public Calendar getIssueDate() {
-        final ImmutableByteArray serialTag = getSerialTag();
-        final GregorianCalendar c = new GregorianCalendar(Utils.UTC);
-
-        c.set(serialTag.convertBCDtoInteger(17, 2),
-                serialTag.convertBCDtoInteger(19, 1) - 1,
-                1, 0, 0, 0);
-        return c;
+    @Nullable
+    public static Calendar parseHexDateTime(long val, @NonNull TimeZone tz) {
+        if (val == INVALID_DATETIME)
+            return null;
+        GregorianCalendar g = new GregorianCalendar(tz);
+        g.set(Utils.convertBCDtoInteger((int) (val >> 40)),
+                Utils.convertBCDtoInteger((int) ((val >> 32) & 0xffL))-1,
+                Utils.convertBCDtoInteger((int) ((val >> 24) & 0xffL)),
+                Utils.convertBCDtoInteger((int) ((val >> 16) & 0xffL)),
+                Utils.convertBCDtoInteger((int) ((val >> 8) & 0xffL)),
+                Utils.convertBCDtoInteger((int) ((val) & 0xffL)));
+        return g;
     }
+
+    @Nullable
+    public static Calendar parseHexDate(long val) {
+        if (val >= INVALID_DATE)
+            return null;
+        GregorianCalendar g = new GregorianCalendar(Utils.UTC);
+        g.set(Utils.convertBCDtoInteger((int) (val >> 16)),
+                Utils.convertBCDtoInteger((int) ((val >> 8) & 0xffL))-1,
+                Utils.convertBCDtoInteger((int) ((val) & 0xffL)),
+                0, 0, 0);
+
+        return g;
+    }
+
 }

@@ -20,6 +20,8 @@
 package au.id.micolous.metrodroid.transit.snapper
 
 import android.util.Log
+import au.id.micolous.metrodroid.card.iso7816.ISO7816TLV
+import au.id.micolous.metrodroid.card.ksx6923.KSX6923Application
 import au.id.micolous.metrodroid.transit.Station
 import au.id.micolous.metrodroid.transit.Transaction
 import au.id.micolous.metrodroid.transit.TransitCurrency
@@ -64,7 +66,7 @@ class SnapperTransaction(
         return tapOn
     }
 
-    override fun getTimestamp() = TMoneyTransitData.parseHexDateTime(time, TZ)
+    override fun getTimestamp() = KSX6923Application.parseHexDateTime(time, TZ)
 
     override fun getFare() = TransitCurrency.NZD(cost)
 
@@ -75,7 +77,6 @@ class SnapperTransaction(
         private val TAG = SnapperTransaction::class.java.simpleName
 
         fun parseTransaction(trip : ImmutableByteArray, balance : ImmutableByteArray) : SnapperTransaction {
-
             val journeyId = trip[5].toInt()
             val seq = trip[4].toInt()
 

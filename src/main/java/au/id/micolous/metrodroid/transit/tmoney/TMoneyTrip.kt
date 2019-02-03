@@ -20,6 +20,7 @@
 
 package au.id.micolous.metrodroid.transit.tmoney
 
+import au.id.micolous.metrodroid.card.ksx6923.KSX6923Application
 import au.id.micolous.metrodroid.transit.TransitCurrency
 import au.id.micolous.metrodroid.transit.Trip
 import au.id.micolous.metrodroid.xml.ImmutableByteArray
@@ -38,7 +39,7 @@ open class TMoneyTrip(open val type: Int, open val cost: Int, open val time: Lon
         }
     }
 
-    override fun getStartTimestamp() = TMoneyTransitData.parseHexDateTime(time, TZ)
+    override fun getStartTimestamp() = KSX6923Application.parseHexDateTime(time, TZ)
 
     companion object {
         private val TZ = TimeZone.getTimeZone("Asia/Seoul")

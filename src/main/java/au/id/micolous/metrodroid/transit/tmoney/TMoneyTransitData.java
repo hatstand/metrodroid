@@ -22,17 +22,14 @@ package au.id.micolous.metrodroid.transit.tmoney;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import android.text.SpannedString;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
-import java.util.GregorianCalendar;
 import java.util.List;
-import java.util.TimeZone;
 
 import au.id.micolous.farebot.R;
 import au.id.micolous.metrodroid.card.CardType;
@@ -41,7 +38,9 @@ import au.id.micolous.metrodroid.card.iso7816.ISO7816Record;
 import au.id.micolous.metrodroid.card.iso7816.ISO7816Selector;
 import au.id.micolous.metrodroid.card.ksx6923.KSX6923Application;
 import au.id.micolous.metrodroid.card.ksx6923.KSX6923CardTransitFactory;
+import au.id.micolous.metrodroid.card.ksx6923.KSX6923PurseInfo;
 import au.id.micolous.metrodroid.transit.CardInfo;
+import au.id.micolous.metrodroid.transit.TransitBalance;
 import au.id.micolous.metrodroid.transit.TransitCurrency;
 import au.id.micolous.metrodroid.transit.TransitData;
 import au.id.micolous.metrodroid.transit.TransitIdentity;
@@ -74,16 +73,16 @@ public class TMoneyTransitData extends TransitData {
 
     public final static KSX6923CardTransitFactory FACTORY = new KSX6923CardTransitFactory() {
         @Override
-        public TransitIdentity parseTransitIdentity(@NonNull KSX6923Application app) {
+        public TransitIdentity parseTransitIdentity(@NotNull KSX6923Application app) {
             return new TransitIdentity(Utils.localizeString(R.string.card_name_tmoney), app.getSerial());
         }
 
         @Override
-        public TransitData parseTransitData(@NonNull KSX6923Application app) {
+        public TransitData parseTransitData(@NotNull KSX6923Application app) {
             return new TMoneyTransitData(app);
         }
 
-        @NonNull
+        @NotNull
         @Override
         public List<CardInfo> getAllCards() {
             return Collections.singletonList(CARD_INFO);
@@ -95,21 +94,19 @@ public class TMoneyTransitData extends TransitData {
         }
     };
 
-    private final String mSerialNumber;
     protected final int mBalance;
-    private final Calendar mDate;
+    private final KSX6923PurseInfo mPurseInfo;
     private final List<? extends Trip> mTrips;
 
-    public TMoneyTransitData(@NonNull KSX6923Application tMoneyCard) {
+    public TMoneyTransitData(@NotNull KSX6923Application tMoneyCard) {
         super();
-        mSerialNumber = tMoneyCard.getSerial();
         mBalance = tMoneyCard.getBalance();
-        mDate = tMoneyCard.getIssueDate();
+        mPurseInfo = tMoneyCard.getPurseInfo();
         mTrips = parseTrips(tMoneyCard);
     }
 
-    @NonNull
-    protected List<? extends Trip> parseTrips(@NonNull KSX6923Application tMoneyCard) {
+    @NotNull
+    protected List<? extends Trip> parseTrips(@NotNull KSX6923Application tMoneyCard) {
         List<TMoneyTrip> trips = new ArrayList<>();
         for (ISO7816Record record : getTransactionRecords(tMoneyCard)) {
             TMoneyTrip t = TMoneyTrip.Companion.parseTrip(record.getData());
@@ -121,8 +118,8 @@ public class TMoneyTransitData extends TransitData {
         return Collections.unmodifiableList(trips);
     }
 
-    @NonNull
-    protected List<ISO7816Record> getTransactionRecords(@NonNull KSX6923Application tMoneyCard) {
+    @NotNull
+    protected List<ISO7816Record> getTransactionRecords(@NotNull KSX6923Application tMoneyCard) {
         ISO7816File f = tMoneyCard.getSfiFile(TRANSACTION_FILE);
         if (f == null)
             f = tMoneyCard.getFile(ISO7816Selector.makeSelector(KSX6923Application.FILE_NAME, TRANSACTION_FILE));
@@ -133,17 +130,17 @@ public class TMoneyTransitData extends TransitData {
 
     @Nullable
     @Override
-    public TransitCurrency getBalance() {
-        return TransitCurrency.KRW(mBalance);
+    public TransitBalance getBalance() {
+        return mPurseInfo.buildTransitBalance(TransitCurrency.KRW(mBalance), null);
     }
 
 
     @Override
     public String getSerialNumber() {
-        return mSerialNumber;
+        return mPurseInfo.getSerial();
     }
 
-    @NonNull
+    @NotNull
     @Override
     public String getCardName() {
         return Utils.localizeString(R.string.card_name_tmoney);
@@ -152,8 +149,34 @@ public class TMoneyTransitData extends TransitData {
     @Override
     public List<ListItem> getInfo() {
         List<ListItem> items = new ArrayList<>();
+        items.add(new ListItem("Card Identification Code",
+                Utils.intToHex(mPurseInfo.getCardType())));
+        items.add(new ListItem("Encryption Algorithm",
+                Utils.intToHex(mPurseInfo.getAlg())));
+        items.add(new ListItem("Keyset Version",
+                Utils.intToHex(mPurseInfo.getVk())));
+        items.add(new ListItem("Issuer ID",
+                Utils.intToHex(mPurseInfo.getIdCenter())));
 
-        items.add(new ListItem(R.string.tmoney_date, Utils.longDateFormat(mDate)));
+        items.add(new ListItem("IDTR",
+                Utils.longToHex(mPurseInfo.getIdtr())));
+        items.add(new ListItem("User code",
+                Utils.intToHex(mPurseInfo.getUserCode())));
+        items.add(new ListItem("Disrate",
+                Utils.intToHex(mPurseInfo.getDisRate())));
+        items.add(new ListItem("Max balance",
+                Long.toString(mPurseInfo.getBalMax())));
+        items.add(new ListItem("branch code",
+                Utils.intToHex(mPurseInfo.getBra())));
+        items.add(new ListItem("mmax",
+                Long.toString(mPurseInfo.getMmax())));
+        items.add(new ListItem("tcode",
+                Utils.intToHex(mPurseInfo.getTcode())));
+        items.add(new ListItem("ccode",
+                Utils.intToHex(mPurseInfo.getCcode())));
+        items.add(new ListItem("rfu",
+                mPurseInfo.getRfu().getHexString()));
+
 
         return items;
     }
@@ -164,36 +187,25 @@ public class TMoneyTransitData extends TransitData {
     }
 
     private TMoneyTransitData(Parcel p) {
-        mSerialNumber = p.readString();
         mBalance = p.readInt();
-        mDate = Utils.unparcelCalendar(p);
+        mPurseInfo = p.readParcelable(KSX6923PurseInfo.class.getClassLoader());
         //noinspection unchecked
         mTrips = p.readArrayList(TMoneyTrip.class.getClassLoader());
     }
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeString(mSerialNumber);
         dest.writeInt(mBalance);
-        Utils.parcelCalendar(dest, mDate);
+        dest.writeParcelable(mPurseInfo, 0);
         dest.writeList(mTrips);
+    }
+
+    @NotNull
+    protected KSX6923PurseInfo getPurseInfo() {
+        return mPurseInfo;
     }
 
     public static TransitIdentity parseTransitIdentity(KSX6923Application card) {
         return new TransitIdentity(Utils.localizeString(R.string.card_name_tmoney), card.getSerial());
-    }
-
-    @Nullable
-    public static Calendar parseHexDateTime(long val, @NonNull TimeZone tz) {
-        if (val == INVALID_DATETIME)
-            return null;
-        GregorianCalendar g = new GregorianCalendar(tz);
-        g.set(Utils.convertBCDtoInteger((int) (val >> 40)),
-                Utils.convertBCDtoInteger((int) ((val >> 32) & 0xffL))-1,
-                Utils.convertBCDtoInteger((int) ((val >> 24) & 0xffL)),
-                Utils.convertBCDtoInteger((int) ((val >> 16) & 0xffL)),
-                Utils.convertBCDtoInteger((int) ((val >> 8) & 0xffL)),
-                Utils.convertBCDtoInteger((int) ((val) & 0xffL)));
-        return g;
     }
 }
